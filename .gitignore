@@ -1,0 +1,51 @@
+# --- Terraform ---
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+
+# Terraform plan output
+*.plan
+*.tfplan
+
+# --- Secrets / credentials ---
+*.pem
+*.key
+*.crt
+*.csr
+*.pfx
+*.p12
+*.kubeconfig
+.kube/
+.env
+.env.*
+
+# AWS
+.aws/
+aws-credentials
+aws_config
+
+# --- Helm ---
+charts/**/charts/
+charts/**/Chart.lock
+
+# --- Kubernetes ---
+*.kubeconfig
+kubeconfig*
+kubectl-cache/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
