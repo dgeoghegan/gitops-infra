@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitops-release-controller-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: REPLACE_ME_GIT_URL
+    targetRevision: main
+    path: REPLACE_ME_PATH
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
