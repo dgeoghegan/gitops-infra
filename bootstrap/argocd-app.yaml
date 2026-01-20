@@ -6,9 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: REPLACE_ME_GIT_URL
+    repoURL: https://github.com/dgeoghegan/gitops-release-controller.git
     targetRevision: main
-    path: REPLACE_ME_PATH
+    path: argocd/applications
   destination:
     server: https://kubernetes.default.svc
     namespace: default
