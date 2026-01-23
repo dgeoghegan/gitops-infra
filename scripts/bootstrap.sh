@@ -1,11 +1,110 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REGION="${REGION:-us-east-1}"
-CLUSTER_NAME="${CLUSTER_NAME:-jb-demo}"
+# ---------- config resolution (shared) ----------
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+TF_DIR="${TF_DIR:-${REPO_ROOT}/terraform}"
+
+# Optional hard fallback if neither TF outputs nor TF vars are readable
+DEFAULT_REGION_FALLBACK="us-east-1"
+DEFAULT_CLUSTER_FALLBACK="jb-demo"
+
+log() { printf "\n[%s] %s\n" "$(date +'%Y-%m-%d %H:%M:%S')" "$*"; }
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+tf_output_json() {
+  [[ -d "${TF_DIR}" ]] || return 1
+  pushd "${TF_DIR}" >/dev/null || return 1
+  terraform output -json 2>/dev/null
+  local rc=$?
+  popd >/dev/null || true
+  return $rc
+}
+
+# Very small HCL "default =" extractor (best-effort). Not a full parser.
+hcl_default() {
+  # hcl_default <var_name> <file>
+  local var="$1" file="$2"
+  [[ -f "$file" ]] || return 1
+  # looks for:
+  # variable "region" { ... default = "us-east-1" ... }
+  awk -v v="$var" '
+    $0 ~ "variable[[:space:]]+\""v"\"" {invar=1}
+    invar && $0 ~ /default[[:space:]]*=/ {
+      # strip everything up to '=' then trim whitespace/quotes
+      sub(/.*default[[:space:]]*=[[:space:]]*/, "", $0)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+      gsub(/^"|"$/, "", $0)
+      print $0
+      exit
+    }
+    invar && $0 ~ /}/ {invar=0}
+  ' "$file"
+}
+
+resolve_from_tf() {
+  local out
+  out="$(tf_output_json || true)"
+  [[ -n "$out" ]] || return 1
+
+  # These output names must match what you define in outputs.tf.
+  # Suggested outputs:
+  # - cluster_name
+  # - region
+  echo "$out" | jq -r '
+    {
+      region: (.region.value // empty),
+      cluster_name: (.cluster_name.value // empty)
+    } | @json
+  ' 2>/dev/null
+}
+
+resolve_from_vars() {
+  # Prefer terraform.tfvars if you have it; then variables.tf defaults
+  local region="" cluster=""
+
+  if [[ -f "${TF_DIR}/terraform.tfvars" ]]; then
+    region="$(awk -F= '/^[[:space:]]*region[[:space:]]*=/ {gsub(/["[:space:]]/, "", $2); print $2; exit}' "${TF_DIR}/terraform.tfvars" || true)"
+    cluster="$(awk -F= '/^[[:space:]]*cluster_name[[:space:]]*=/ {gsub(/["[:space:]]/, "", $2); print $2; exit}' "${TF_DIR}/terraform.tfvars" || true)"
+  fi
+
+  if [[ -z "${region}" ]]; then
+    region="$(hcl_default region "${TF_DIR}/variables.tf" || true)"
+  fi
+  if [[ -z "${cluster}" ]]; then
+    cluster="$(hcl_default cluster_name "${TF_DIR}/variables.tf" || true)"
+  fi
+
+  jq -n --arg region "$region" --arg cluster_name "$cluster" \
+    '{region:$region, cluster_name:$cluster_name}'
+}
+
+# Final resolution
+REGION="${REGION:-}"
+CLUSTER_NAME="${CLUSTER_NAME:-}"
+
+if [[ -z "${REGION}" || -z "${CLUSTER_NAME}" ]]; then
+  if have terraform && have jq; then
+    tf_resolved="$(resolve_from_tf || true)"
+    if [[ -n "${tf_resolved}" ]]; then
+      [[ -z "${REGION}" ]] && REGION="$(echo "${tf_resolved}" | jq -r '.region // empty')"
+      [[ -z "${CLUSTER_NAME}" ]] && CLUSTER_NAME="$(echo "${tf_resolved}" | jq -r '.cluster_name // empty')"
+    fi
+  fi
+fi
+
+if [[ -z "${REGION}" || -z "${CLUSTER_NAME}" ]]; then
+  vars_resolved="$(resolve_from_vars || true)"
+  [[ -z "${REGION}" ]] && REGION="$(echo "${vars_resolved}" | jq -r '.region // empty')"
+  [[ -z "${CLUSTER_NAME}" ]] && CLUSTER_NAME="$(echo "${vars_resolved}" | jq -r '.cluster_name // empty')"
+fi
+
+REGION="${REGION:-${DEFAULT_REGION_FALLBACK}}"
+CLUSTER_NAME="${CLUSTER_NAME:-${DEFAULT_CLUSTER_FALLBACK}}"
+
+log "Resolved config: TF_DIR=${TF_DIR} REGION=${REGION} CLUSTER_NAME=${CLUSTER_NAME}"
 
 echo "==> AWS identity"
 aws sts get-caller-identity >/dev/null
