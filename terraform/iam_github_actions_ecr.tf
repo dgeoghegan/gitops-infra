@@ -14,7 +14,7 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   ]
 
   thumbprint_list = [
-    data.tls_certificate.github_actions.certificates[0].sha1.fingerprint,
+    data.tls_certificate.github_actions.certificates[0].sha1_fingerprint,
   ]
 }
 
@@ -49,7 +49,7 @@ variable "ecr_repository_name" {
 data  "aws_region" "current" {}
 
 locals {
-  ecr_repo_arn  = "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${ecr_repository_name}"
+  ecr_repo_arn  = "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.ecr_repository_name}"
 }
 
 
@@ -72,7 +72,7 @@ data "aws_iam_policy_document" "gha_assume_role" {
       test      = "StringEquals"
       variable  = "token.actions.githubusercontent.com:sub"
       values    = [
-        "repo:${var.github_branch}:ref:refs/heads/${var.github_actions_branch}"
+        "repo:${var.github_branch}:ref:refs/heads/${var.github_branch}"
       ]
     }
   }
@@ -80,7 +80,7 @@ data "aws_iam_policy_document" "gha_assume_role" {
 
 resource "aws_iam_role" "github_actions_ecr_push" {
   name                = "github-actions-ecr-push"
-  assume_policy_role  = data.aws_iam_policy_document.gha_assume_role.json
+  assume_role_policy  = data.aws_iam_policy_document.gha_assume_role.json
 }
 
 #############################
