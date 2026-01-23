@@ -46,7 +46,6 @@ variable "ecr_repository_name" {
   default     = "versioned-app"
 }
 
-data "aws_caller_identity" "current" {}
 data  "aws_region" "current" {}
 
 locals {
