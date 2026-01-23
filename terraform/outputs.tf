@@ -29,3 +29,8 @@ output "public_subnet_ids" {
 output "alb_controller_role_arn" {
   value = aws_iam_role.alb_controller.arn
 }
+
+output "github_actions_ecr_push_role_arn" {
+  description = "Role ARN assumed by GitHub Actions (versioned-app) to push images to ECR"
+  value       = aws_iam_role.github_actions_ecr_push.arn
+}
