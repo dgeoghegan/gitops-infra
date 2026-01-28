@@ -67,12 +67,19 @@ data "aws_iam_policy_document" "gha_assume_role" {
       identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
     }
 
-    # Restrict to exact repo + branch ref
     condition {
       test      = "StringEquals"
+      variable  = "token.actions.githubusercontent.com:aud"
+      values    = ["sts.amazonaws.com"]
+    }
+
+    # Restrict to exact repo + branch ref
+    condition {
+      test      = "StringLike"
       variable  = "token.actions.githubusercontent.com:sub"
       values    = [
-        "repo:${var.github_branch}:ref:refs/heads/${var.github_branch}"
+        "repo:${var.github_org}/${var.github_repo_versioned_app}:ref:refs/heads/${var.github_branch}",
+        "repo:${var.github_org}/${var.github_repo_versioned_app}:ref:refs/tags/v*"
       ]
     }
   }
