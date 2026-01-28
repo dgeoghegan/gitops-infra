@@ -4,7 +4,7 @@ set -euo pipefail
 # ---------- config resolution (shared) ----------
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TF_DIR="${TF_DIR:-${REPO_ROOT}/terraform}"
+TF_DIR="${TF_DIR:-${REPO_ROOT}/infrastructure/terraform}"
 
 # Optional hard fallback if neither TF outputs nor TF vars are readable
 DEFAULT_REGION_FALLBACK="us-east-1"

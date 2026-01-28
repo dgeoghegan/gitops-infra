@@ -26,7 +26,7 @@ set -euo pipefail
 # ---------- config resolution (shared) ----------
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TF_DIR="${TF_DIR:-${REPO_ROOT}/terraform}"
+TF_DIR="${TF_DIR:-${REPO_ROOT}/terraform/infrastructure}"
 
 # Optional hard fallback if neither TF outputs nor TF vars are readable
 DEFAULT_REGION_FALLBACK="us-east-1"
@@ -183,14 +183,9 @@ fi
 
 # 1) Disable/Remove Argo-managed apps quickly (optional but helps stop recreation loops)
 # If your root app exists, deleting it prevents Argo from re-creating resources while we tear down.
-log "Attempting to delete Argo CD 'root app' (if present) to stop reconciliation"
-kubectl -n argocd get applications.argoproj.io >/dev/null 2>&1 || true
-# Common names; adjust if yours differs.
-for APP in argocd-root-app root-app app-of-apps; do
-  if kubectl -n argocd get application "${APP}" >/dev/null 2>&1; then
-    kubectl -n argocd delete application "${APP}" --wait=false || true
-  fi
-done
+log "Attempting to delete all Argo CD apps to stop reconciliation"
+kubectl -n argocd get applications.argoproj.io -o name 2>/dev/null | \
+  xargs -r kubectl -n argocd delete --wait=false || true
 
 # 2) Delete Ingresses first (fastest way to trigger ALB deletion)
 log "Deleting all Ingress objects in demo namespaces (if any)"
@@ -211,14 +206,33 @@ done
 # 4) Wait for namespaces to terminate (bounded wait, then continue anyway)
 log "Waiting for namespaces to terminate (up to 10 minutes)"
 end_ns=$((SECONDS+600))
-for ns in ${NAMESPACES}; do
-  while kubectl get ns "${ns}" >/dev/null 2>&1; do
-    if (( SECONDS > end_ns )); then
-      log "WARNING: Namespace ${ns} still exists after timeout; continuing."
-      break
+log "Waiting for namespaces to terminate (up to 10 minutes total)"
+end_ns=$((SECONDS+600))
+
+while true; do
+  remaining=0
+  for ns in ${NAMESPACES}; do
+    phase="$(kubectl get ns "${ns}" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+    if [[ -n "${phase}" ]]; then
+      remaining=$((remaining+1))
+      log "Namespace still present: ${ns} phase=${phase}"
     fi
-    sleep 10
   done
+
+  if [[ "${remaining}" -eq 0 ]]; then
+    log "All demo namespaces removed."
+    break
+  fi
+
+  if (( SECONDS > end_ns )); then
+    log "WARNING: Some namespaces still exist after timeout. Dumping finalizers for debugging:"
+    for ns in ${NAMESPACES}; do
+      kubectl get ns "${ns}" -o jsonpath='{.metadata.name}{" finalizers="}{.spec.finalizers}{"\n"}' 2>/dev/null || true
+    done
+    break
+  fi
+
+  sleep 10
 done
 
 # 5) Wait for AWS Load Balancer Controller-managed security groups / ENIs to disappear.
