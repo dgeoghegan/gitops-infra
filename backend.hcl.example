@@ -1,0 +1,4 @@
+bucket         = "<YOUR_TFSTATE_BUCKET>"
+region         = "<YOUR_AWS_REGION>"
+dynamodb_table = "<YOUR_LOCK_TABLE>"
+encrypt        = true

@@ -23,6 +23,7 @@ crash.*.log
 .kube/
 .env
 .env.*
+backend.hcl
 
 # AWS
 .aws/

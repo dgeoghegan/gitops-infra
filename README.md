@@ -70,9 +70,9 @@ Local tools:
 
 AWS account and permissions:
 - Ability to create/manage: VPC, EKS, IAM roles/policies, ECR, and (for the controller) ELB-related resources
-- Terraform remote state backend must exist and be accessible:
-  - S3 bucket: `dgeoghegan-tfstate-us-east-1`
-  - DynamoDB table: `terraform-locks`
+- Terraform remote state backend must exist and be accessible (you provide your own):
+  - S3 bucket for state
+  - DynamoDB table for state locking (recommended)
 
 GitHub access assumptions:
 - The demo assumes the following repos exist and are readable:
@@ -108,20 +108,34 @@ Script environment variables (optional overrides):
 From repo root:
 
 ```bash
-# 0) Sanity check credentials
+# 0) Configure Terraform backend (one-time)
+cp backend.hcl.example backend.hcl
+```
+
+Edit `backend.hcl` and set:
+- `bucket` — your S3 bucket for Terraform state
+- `region` — the AWS region of that bucket
+- `dynamodb_table` — your DynamoDB table for state locking
+
+```bash
+# 1) Sanity check credentials
 aws sts get-caller-identity
 
-# 1) Durable artifacts (ECR + GitHub OIDC + CI role)
+# 2) Durable artifacts (ECR + GitHub OIDC + CI role)
 cd terraform/artifacts
-terraform init
+terraform init \
+  -backend-config=../../backend.hcl \
+  -backend-config="key=gitops-infra/artifacts/terraform.tfstate"
 terraform apply
 
-# 2) Ephemeral infra (VPC + EKS + IRSA role for ALB controller)
+# 3) Ephemeral infra (VPC + EKS + IRSA role for ALB controller)
 cd ../infrastructure
-terraform init
+terraform init \
+  -backend-config=../../backend.hcl \
+  -backend-config="key=gitops-infra/infrastructure/terraform.tfstate"
 terraform apply
 
-# 3) Bootstrap in-cluster components (ALB controller + Argo CD + root Argo app)
+# 4) Bootstrap in-cluster components (ALB controller + Argo CD + root Argo app)
 cd ../../scripts
 ./bootstrap.sh
 ```
@@ -143,8 +157,11 @@ What it creates:
 Commands:
 ```bash
 cd terraform/artifacts
-terraform init
+terraform init \
+  -backend-config=../../backend.hcl \
+  -backend-config="key=gitops-infra/artifacts/terraform.tfstate"
 terraform apply
+
 ```
 
 Useful outputs:
@@ -163,7 +180,9 @@ What it creates:
 Commands:
 ```bash
 cd terraform/infrastructure
-terraform init
+terraform init \
+  -backend-config=../../backend.hcl \
+  -backend-config="key=gitops-infra/infrastructure/terraform.tfstate"
 terraform apply
 ```
 
