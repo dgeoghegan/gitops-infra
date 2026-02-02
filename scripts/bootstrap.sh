@@ -4,11 +4,7 @@ set -euo pipefail
 # ---------- config resolution (shared) ----------
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TF_DIR="${TF_DIR:-${REPO_ROOT}/infrastructure/terraform}"
-
-# Optional hard fallback if neither TF outputs nor TF vars are readable
-DEFAULT_REGION_FALLBACK="us-east-1"
-DEFAULT_CLUSTER_FALLBACK="jb-demo"
+TF_DIR="${TF_DIR:-${REPO_ROOT}/terraform/infrastructure}"
 
 log() { printf "\n[%s] %s\n" "$(date +'%Y-%m-%d %H:%M:%S')" "$*"; }
 
@@ -101,8 +97,18 @@ if [[ -z "${REGION}" || -z "${CLUSTER_NAME}" ]]; then
   [[ -z "${CLUSTER_NAME}" ]] && CLUSTER_NAME="$(echo "${vars_resolved}" | jq -r '.cluster_name // empty')"
 fi
 
-REGION="${REGION:-${DEFAULT_REGION_FALLBACK}}"
-CLUSTER_NAME="${CLUSTER_NAME:-${DEFAULT_CLUSTER_FALLBACK}}"
+if [[ -z "${REGION}" || -z "${CLUSTER_NAME}" ]]; then
+  echo "ERROR: Could not resolve REGION/CLUSTER_NAME." >&2
+  echo "Checked (in order):" >&2
+  echo "  1) terraform outputs in TF_DIR=${TF_DIR}" >&2
+  echo "  2) ${TF_DIR}/terraform.tfvars and ${TF_DIR}/variables.tf defaults" >&2
+  echo "" >&2
+  echo "Fix one of:" >&2
+  echo "  - Set TF_DIR to the correct terraform root (expected: \$REPO_ROOT/terraform/infrastructure)" >&2
+  echo "  - Or export REGION and CLUSTER_NAME explicitly:" >&2
+  echo "      REGION=us-east-1 CLUSTER_NAME=jb-demo ./scripts/bootstrap.sh" >&2
+  exit 1
+fi
 
 log "Resolved config: TF_DIR=${TF_DIR} REGION=${REGION} CLUSTER_NAME=${CLUSTER_NAME}"
 

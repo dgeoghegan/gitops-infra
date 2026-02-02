@@ -9,9 +9,8 @@ set -euo pipefail
 #   then waiting until AWS-side dependencies are gone, then running terraform destroy.
 #
 # Assumptions:
-#   - You are using EKS in us-east-1 by default.
-#   - Cluster name defaults to jb-demo.
-#   - Terraform root is ./terraform (repo-root/terraform).
+#   - REGION and CLUSTER_NAME are resolved from Terraform outputs/vars under TF_DIR (default: repo-root/terraform/infrastructure), or must be provided explicitly.
+#   - Terraform state/outputs exist for the target cluster.
 #   - Demo namespaces are jb-dev, jb-staging, jb-prod (adjust if needed).
 #   - Your VPC is tagged Name="${CLUSTER_NAME}-vpc" OR can be read from terraform output vpc_id.
 #
@@ -20,17 +19,13 @@ set -euo pipefail
 #     ./scripts/teardown.sh
 #
 # Optional env overrides:
-#   REGION=us-east-1 CLUSTER_NAME=jb-demo TF_DIR=terraform NAMESPACES="jb-dev jb-staging jb-prod" ./scripts/teardown.sh
+#   REGION=us-east-1 CLUSTER_NAME=jb-demo TF_DIR=terraform/infrastructure NAMESPACES="jb-dev jb-staging jb-prod" ./scripts/teardown.sh
 #
 
 # ---------- config resolution (shared) ----------
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TF_DIR="${TF_DIR:-${REPO_ROOT}/terraform/infrastructure}"
-
-# Optional hard fallback if neither TF outputs nor TF vars are readable
-DEFAULT_REGION_FALLBACK="us-east-1"
-DEFAULT_CLUSTER_FALLBACK="jb-demo"
 
 log() { printf "\n[%s] %s\n" "$(date +'%Y-%m-%d %H:%M:%S')" "$*"; }
 
@@ -126,8 +121,18 @@ if [[ -z "${REGION}" || -z "${CLUSTER_NAME}" ]]; then
   [[ -z "${CLUSTER_NAME}" ]] && CLUSTER_NAME="$(echo "${vars_resolved}" | jq -r '.cluster_name // empty')"
 fi
 
-REGION="${REGION:-${DEFAULT_REGION_FALLBACK}}"
-CLUSTER_NAME="${CLUSTER_NAME:-${DEFAULT_CLUSTER_FALLBACK}}"
+if [[ -z "${REGION}" || -z "${CLUSTER_NAME}" ]]; then
+  echo "ERROR: Could not resolve REGION/CLUSTER_NAME." >&2
+  echo "Checked (in order):" >&2
+  echo "  1) terraform outputs in TF_DIR=${TF_DIR}" >&2
+  echo "  2) ${TF_DIR}/terraform.tfvars and ${TF_DIR}/variables.tf defaults" >&2
+  echo "" >&2
+  echo "Fix one of:" >&2
+  echo "  - Set TF_DIR to the correct terraform root (expected: \$REPO_ROOT/terraform/infrastructure)" >&2
+  echo "  - Or export REGION and CLUSTER_NAME explicitly:" >&2
+  echo "      REGION=us-east-1 CLUSTER_NAME=jb-demo ./scripts/teardown.sh" >&2
+  exit 1
+fi
 
 log "Resolved config: TF_DIR=${TF_DIR} REGION=${REGION} CLUSTER_NAME=${CLUSTER_NAME}"
 
@@ -205,8 +210,6 @@ done
 
 # 4) Wait for namespaces to terminate (bounded wait, then continue anyway)
 log "Waiting for namespaces to terminate (up to 10 minutes)"
-end_ns=$((SECONDS+600))
-log "Waiting for namespaces to terminate (up to 10 minutes total)"
 end_ns=$((SECONDS+600))
 
 while true; do
