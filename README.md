@@ -74,6 +74,8 @@ AWS account and permissions:
   - S3 bucket for state
   - DynamoDB table for state locking (recommended)
 
+For this demo run, Terraform was applied using a personal IAM user; CI paths use GitHub OIDC. A reviewer reproducing this would need equivalent permissions.
+
 GitHub access assumptions:
 - The demo assumes the following repos exist and are readable:
   - `dgeoghegan/versioned-app`
