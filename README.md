@@ -103,6 +103,59 @@ Script environment variables (optional overrides):
 - `TF_DIR` (if your Terraform roots move later)
 - `NAMESPACES` (teardown only; defaults to `jb-dev jb-staging jb-prod`)
 
+Implicit contracts (Terraform ↔ scripts)
+
+The bootstrap and teardown scripts rely on a small, explicit set of contracts with the Terraform configuration. These are intentional and kept minimal.
+
+Terraform outputs:
+- The infrastructure root is expected to expose the following outputs:
+  - cluster_name
+  - region
+- Scripts use these outputs to resolve configuration automatically.
+- If outputs are unavailable, scripts fall back (in order) to:
+  - terraform.tfvars
+  - variable defaults
+  - explicit environment variables.
+
+Cluster naming:
+- CLUSTER_NAME must match the EKS cluster name created by Terraform.
+- If you change the cluster name in Terraform, re-run terraform apply, or export CLUSTER_NAME explicitly when running scripts.
+
+Controller roles and service accounts:
+- The AWS Load Balancer Controller and other add-ons assume the IAM roles and Kubernetes service accounts created by Terraform and installed during bootstrap.
+- If you rename these in Terraform or Helm values, ensure the corresponding Kubernetes resources are updated consistently.
+
+How to change safely:
+- Preferred: update names in Terraform, run terraform apply, then re-run scripts/bootstrap.sh.
+- Override: export REGION and CLUSTER_NAME explicitly when running scripts if automatic resolution is not possible.
+
+### Implicit contracts (Terraform ↔ scripts)
+
+The bootstrap and teardown scripts rely on a small set of **intentional, minimal contracts** with Terraform. These are not dynamically discovered abstractions; they are explicit assumptions that keep the demo legible.
+
+**Terraform outputs**
+- The infrastructure root is expected to expose the following outputs:
+  - `cluster_name`
+  - `region`
+- Scripts use these outputs to resolve configuration automatically.
+- If outputs are unavailable, scripts fall back (in order) to:
+  1. `terraform.tfvars`
+  2. `variables.tf` defaults
+  3. Explicit environment variables
+
+**Cluster naming**
+- `CLUSTER_NAME` must match the EKS cluster name created by Terraform.
+- If you change the cluster name in Terraform, re-run `terraform apply`, then re-run `scripts/bootstrap.sh`.
+- As an escape hatch, you may export `CLUSTER_NAME` explicitly when running scripts.
+
+**IRSA and controller roles**
+- Cluster add-ons (for example, AWS Load Balancer Controller) assume the IAM roles and service accounts created by Terraform and installed during bootstrap.
+- If you rename these in Terraform, the corresponding Kubernetes manifests or Helm values must be updated consistently.
+
+**Safe modification pattern**
+- Preferred: change names in Terraform, run `terraform apply`, then re-run `scripts/bootstrap.sh`.
+- Override: export `REGION` and `CLUSTER_NAME` explicitly when running scripts if outputs cannot be resolved.
+
 ## Quickstart (copy/paste)
 
 From repo root:
