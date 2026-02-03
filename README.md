@@ -282,28 +282,35 @@ kubectl -n jb-dev get ingress <INGRESS_NAME> -o jsonpath='{.status.loadBalancer.
 
 ## Teardown
 
-Goal: avoid `DependencyViolation` errors during `terraform destroy` by first deleting Kubernetes objects that cause the AWS Load Balancer Controller to provision AWS resources (ALBs, SGs, ENIs), waiting for AWS-side dependencies to disappear, then running `terraform destroy`.
+Teardown is **best-effort and bounded**. It is designed to make `terraform destroy` succeed reliably by first deleting Kubernetes resources that trigger the AWS Load Balancer Controller (ALBs, ENIs, security groups), then waiting (with timeouts) for AWS-side dependencies to clear.
 
-What teardown destroys:
-- Argo CD Applications (to stop reconciliation loops)
-- Ingresses in demo namespaces (triggering ALB deletion)
-- Demo namespaces (defaults: `jb-dev jb-staging jb-prod`)
-- The EKS/VPC infrastructure (via `terraform destroy` in the infra root)
+What teardown does:
+- Updates kubeconfig for the target cluster
+- Deletes Argo CD Applications (to stop reconciliation loops)
+- Deletes all Ingress resources in the demo namespaces
+- Deletes the demo namespaces (`jb-dev jb-staging jb-prod` by default)
+- Waits (bounded) for namespaces to terminate
+- Waits (bounded) for common AWS dependencies (SGs/ENIs) associated with controller-managed load balancers to disappear
+- Runs `terraform destroy` for the infrastructure root
 
-What teardown does not destroy:
-- Durable artifacts under `terraform/artifacts/`:
-  - ECR repo is protected by `prevent_destroy = true`
-  - GitHub OIDC provider and GitHub Actions IAM role/policy persist unless you explicitly destroy the artifacts root
+What teardown does not guarantee:
+- Immediate cleanup of all AWS resources. ALB/ENI/SG deletion is subject to AWS eventual consistency and can exceed the timeout.
+- Automatic cleanup if cluster state or AWS state has already diverged from Terraform (e.g., manual edits, partial applies).
 
-Run:
+If teardown hits a timeout:
+- The script will continue and/or emit inspect commands.
+- If `terraform destroy` fails with dependency errors, wait a few minutes and re-run `scripts/teardown.sh`, or use the printed AWS CLI commands to identify remaining dependencies.
+
+Run teardown from repo root:
 ```bash
-cd scripts
-./teardown.sh
+scripts/teardown.sh
 ```
 
-Override namespaces if you change them later:
+Optional overrides:
 ```bash
-NAMESPACES="jb-dev jb-staging jb-prod" ./teardown.sh
+REGION=us-east-1 CLUSTER_NAME=jb-demo TF_DIR=terraform/infrastructure \
+NAMESPACES="jb-dev jb-staging jb-prod" \
+scripts/teardown.sh
 ```
 
 Notes:
