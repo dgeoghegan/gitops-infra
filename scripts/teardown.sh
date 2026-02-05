@@ -151,6 +151,10 @@ need jq
 log "Updating kubeconfig for cluster ${CLUSTER_NAME} in ${REGION}"
 aws eks update-kubeconfig --region "${REGION}" --name "${CLUSTER_NAME}" >/dev/null
 
+log "Sanity check: kubectl authorized for this cluster"
+kubectl auth can-i get namespaces >/dev/null 2>&1 \
+  || die "kubectl is not authorized for this cluster. Ensure your IAM principal is granted EKS access (access entry / cluster admin)."
+
 log "Sanity check: kubectl can reach the cluster"
 kubectl cluster-info >/dev/null
 

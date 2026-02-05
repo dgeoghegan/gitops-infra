@@ -132,6 +132,10 @@ fi
 echo "==> Updating kubeconfig (refresh endpoint/CA)..."
 aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER_NAME" >/dev/null
 
+echo "==> Verifying kubectl authorization for this cluster..."
+kubectl auth can-i get namespaces >/dev/null 2>&1 \
+  || die "kubectl is not authorized for this cluster. Ensure your IAM principal is granted EKS access (access entry / cluster admin)."
+
 echo "==> Verifying kubectl connectivity..."
 kubectl cluster-info >/dev/null
 
